@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Monitor</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+
+        #table-container {
+            margin-top: 30px;
+        }
+
+        table {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .status-container {
+            margin-top: 20px;
+        }
+
+        .status-label {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .status-item {
+            display: inline-block;
+            margin: 0 10px;
+            margin-bottom: 0;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .darkgreen {
+            background-color: #43a047;
+            color: #fff;
+        }
+
+        .green {
+            background-color: #66bb6a;
+            color: #fff;
+        }
+
+        .yellow {
+            background-color: #ffd54f;
+            color: #fff;
+        }
+
+        .red {
+            background-color: #e57373;
+            color: #fff;
+        }
+
+        .loading {
+            text-align: center;
+            font-style: italic;
+            color: #777;
+            padding: 20px;
+        }
+        .loading td {
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+
+<div class="status-container">
+    <div class="status-label">Status</div>
+    <div>
+        <div class="status-item darkgreen">Healthy</div>
+        <div class="status-item green">Up</div>
+        <div class="status-item yellow">Unhealthy</div>
+        <div class="status-item red">Down</div>
+    </div>
+</div>
+<div id="table-container">
+    <table id="data-table">
+        <tr>
+            <th>Node ID</th>
+            <th>Command</th>
+            <th>CreatedAt</th>
+            <th>Container ID</th>
+            <th>Image</th>
+            <th>Labels</th>
+            <th>LocalVolumes</th>
+            <th>Mounts</th>
+            <th>Names</th>
+            <th>Networks</th>
+            <th>Ports</th>
+            <th>RunningFor</th>
+            <th>Size</th>
+            <th>State</th>
+            <th>Status</th>
+        </tr>
+        <tbody id="tablebody">
+            <tr class="loading">
+                <td colspan="15">Loading...</td>
+            </tr>
+        </tbody>
+    </table>
+    
+</div>
+
+<script>
+// Fetch data from the API and update the table
+function fetchDataAndUpdateTable() {
+    fetch('/get_docker_nodes')
+        .then(response => response.json())
+        .then(dataList => {
+            updateTableBody(dataList);
+        })
+        .catch(error => {
+            console.error('Error fetching data:', error);
+        });
+}
+
+// Update the table body with new data
+function updateTableBody(dataList) {
+    var tableBody = document.getElementById('tablebody');
+    tableBody.innerHTML = ''; // Clear table body content
+
+    dataList.forEach(function(data) {
+        var row;
+        var cellNode;
+        if (data.Message === "Time out") {
+            // Display server IP with time out message
+            row = tableBody.insertRow();
+            cellNode = row.insertCell();
+            cellNode.textContent = "Server IP: " + data.Node + " - " + data.Message;
+            cellNode.colSpan = 15;
+            cellNode.classList.add("red");
+        } else {
+            if (data.Info && data.Info.length > 0) {
+                data.Info.forEach(function(info) {
+                    row = tableBody.insertRow();
+                    cellNode = row.insertCell();
+                    cellNode.textContent = data.Node;
+
+                    for (var key in info) {
+                        var cell = row.insertCell();
+                        cell.textContent = info[key];
+
+                        if (key === "Status") {
+                            if (info[key].includes("unhealthy")) {
+                                cell.classList.add("yellow");
+                            } else if (info[key].includes("healthy")) {
+                                cell.classList.add("darkgreen");
+                            } else if (info[key].includes("Up")) {
+                                cell.classList.add("green");
+                            }else {
+                                cell.classList.add("red");
+                            }
+                        }
+                    }
+                });
+            } else {
+                // If data.Info is empty, add a row indicating lack of information
+                row = tableBody.insertRow();
+                cellNode = row.insertCell();
+                cellNode.colSpan = 15; // Assuming 15 columns
+                cellNode.textContent = "No information available";
+            }
+        }
+    });
+}
+
+fetchDataAndUpdateTable();
+setInterval(fetchDataAndUpdateTable, 5000);
+
+</script>
+</body>
+</html>

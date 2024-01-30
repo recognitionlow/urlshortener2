@@ -1,0 +1,106 @@
+version: '3'
+services:
+
+  redis-primary:
+    image: redis:7.2.2
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - ~/data/redis:/data
+    deploy:
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints: [node.role == manager]
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+      start_period: 30s
+
+  redis-replica:
+    image: redis:7.2.2
+    command: redis-server --replicaof redis-primary 6379
+    volumes:
+      - ~/data/redis:/data
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints: [node.role == worker]
+    depends_on:
+      - redis-primary
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+      start_period: 30s
+
+  worker:
+    image: sjwsteven/url-handler:worker
+    deploy:
+      replicas: 4
+      restart_policy:
+        condition: on-failure
+    depends_on:
+      - redis-primary
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f worker.py > /dev/null; if [ $$? -eq 0 ]; then exit 0; else exit 1; fi"]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+      start_period: 30s
+
+  logger:
+    image: sjwsteven/url-handler:logger
+    volumes:
+      - ~/data/logs:/root/logs
+    depends_on:
+      - redis-primary
+    deploy:
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints: [node.role == manager]
+    healthcheck:
+      test: [ "CMD-SHELL", "pgrep -f logger.py > /dev/null; if [ $$? -eq 0 ]; then exit 0; else exit 1; fi" ]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+      start_period: 30s
+ 
+
+  fast-handler:
+    image: sjwsteven/url-handler:fast
+    ports:
+      - "8081:5000"
+    deploy:
+      replicas: 4
+      restart_policy:
+        condition: on-failure
+    depends_on:
+      - redis-primary
+      - redis-replica
+      - worker
+    healthcheck:
+      test: ["CMD", "curl", "-s", "http://localhost:5000/"]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+      start_period: 30s
+
+  monitor:
+    image: sjwsteven/monitor:latest
+    ports:
+     - "8080:8080"
+    deploy:
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ["CMD", "curl", "-s", "http://localhost:8080/"]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+      start_period: 30s
